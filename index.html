@@ -208,9 +208,19 @@
     display: flex; align-items: flex-start; gap: 12px;
     padding: 11px 0; border-bottom: 1px solid var(--line);
     animation: fi .15s ease;
+    transition: opacity .15s;
   }
   @keyframes fi { from { opacity: 0; } to { opacity: 1; } }
   .task:last-child { border-bottom: none; }
+  .task.dragging  { opacity: .2; }
+  .task.drag-over { border-top: 2px solid var(--text3); padding-top: 9px; }
+  .drag-handle {
+    display: flex; align-items: center; flex-shrink: 0;
+    cursor: grab; color: var(--border2); padding-top: 3px;
+    transition: color .15s;
+  }
+  .drag-handle:hover { color: var(--text3); }
+  .drag-handle:active { cursor: grabbing; }
 
   /* Checkbox */
   .cb {
@@ -490,7 +500,7 @@ window.del = id => remove(ref(db,`daily_tasks/${id}`)).then(()=>toast('Removed')
 function render() {
   if(browseMode){ renderBrowse(); return; }
   const today=dateStr(0), yest=dateStr(-1);
-  const byDate = d => allTasks.filter(t=>t.date===d).sort((a,b)=>(a.createdAt??0)-(b.createdAt??0));
+  const byDate = d => allTasks.filter(t=>t.date===d).sort((a,b)=> a.sortOrder!=null&&b.sortOrder!=null ? a.sortOrder-b.sortOrder : (a.createdAt??0)-(b.createdAt??0));
   const todayT=byDate(today), yesterT=byDate(yest);
 
   $('cnt-today').textContent    = todayT.length  ? `${todayT.length} task${todayT.length!==1?'s':''}` : '';
@@ -506,7 +516,7 @@ function renderBrowse() {
   const dates=[...dateSet].sort((a,b)=>b.localeCompare(a));
 
   $('browse-sections').innerHTML = dates.map(date => {
-    const tasks=allTasks.filter(t=>t.date===date).sort((a,b)=>(a.createdAt??0)-(b.createdAt??0));
+    const tasks=allTasks.filter(t=>t.date===date).sort((a,b)=> a.sortOrder!=null&&b.sortOrder!=null ? a.sortOrder-b.sortOrder : (a.createdAt??0)-(b.createdAt??0));
     const isToday=date===dateStr(0);
     const iid=`bi-${date}`, tid=`bt-${date}`;
     return `
@@ -544,7 +554,17 @@ function renderBrowse() {
 function taskRow(t) {
   const tag=(t.tag||'other').replace(/\s+/g,'-').toLowerCase();
   return `
-  <div class="task ${t.done?'done':''}">
+  <div class="task ${t.done?'done':''}" data-id="${t.id}" draggable="true">
+    <div class="drag-handle" title="Drag to reorder">
+      <svg width="8" height="13" viewBox="0 0 8 13" fill="none">
+        <circle cx="2" cy="2"  r="1.2" fill="currentColor"/>
+        <circle cx="6" cy="2"  r="1.2" fill="currentColor"/>
+        <circle cx="2" cy="6.5" r="1.2" fill="currentColor"/>
+        <circle cx="6" cy="6.5" r="1.2" fill="currentColor"/>
+        <circle cx="2" cy="11" r="1.2" fill="currentColor"/>
+        <circle cx="6" cy="11" r="1.2" fill="currentColor"/>
+      </svg>
+    </div>
     <div class="cb" onclick="toggleDone('${t.id}',${t.done})">
       <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
         <path d="M1 3L3.5 5.5L8 1" stroke="var(--bg)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -567,6 +587,59 @@ function taskRow(t) {
 
 updateThemeIcon(document.documentElement.getAttribute('data-theme'));
 formatHeader();
+
+/* ── DRAG & DROP ── */
+let dragId = null;
+
+function bindDrag(container) {
+  container.querySelectorAll('.task[data-id]').forEach(el => {
+    el.addEventListener('dragstart', e => {
+      dragId = el.dataset.id;
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(() => el.classList.add('dragging'), 0);
+    });
+    el.addEventListener('dragend', () => {
+      el.classList.remove('dragging');
+      container.querySelectorAll('.task').forEach(t => t.classList.remove('drag-over'));
+    });
+    el.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      container.querySelectorAll('.task').forEach(t => t.classList.remove('drag-over'));
+      if (el.dataset.id !== dragId) el.classList.add('drag-over');
+    });
+    el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+    el.addEventListener('drop', async e => {
+      e.preventDefault();
+      el.classList.remove('drag-over');
+      const targetId = el.dataset.id;
+      if (!dragId || dragId === targetId) return;
+
+      // Get current visible order in this container
+      const ids = [...container.querySelectorAll('.task[data-id]')].map(t => t.dataset.id);
+      const si = ids.indexOf(dragId), ti = ids.indexOf(targetId);
+      if (si < 0 || ti < 0) return;
+      ids.splice(si, 1);
+      ids.splice(ti, 0, dragId);
+
+      // Write sortOrder for all tasks in this list
+      const updates = {};
+      ids.forEach((id, i) => { updates[`daily_tasks/${id}/sortOrder`] = i * 1000; });
+      update(ref(db), updates).catch(() => toast('Reorder failed'));
+      dragId = null;
+    });
+  });
+}
+
+// Observe DOM changes and rebind drag on every render
+const observer = new MutationObserver(() => {
+  ['list-today','list-yesterday'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) bindDrag(el);
+  });
+  document.querySelectorAll('[id^="browse-tasks-"]').forEach(el => bindDrag(el));
+});
+observer.observe(document.getElementById('app'), { childList: true, subtree: true });
 </script>
 </body>
 </html>
