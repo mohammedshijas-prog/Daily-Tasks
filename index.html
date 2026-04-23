@@ -205,22 +205,52 @@
 
   /* ── TASK ── */
   .task {
-    display: flex; align-items: flex-start; gap: 12px;
-    padding: 11px 0; border-bottom: 1px solid var(--line);
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px 0; border-bottom: 1px solid var(--line);
     animation: fi .15s ease;
     transition: opacity .15s;
+    position: relative;
   }
   @keyframes fi { from { opacity: 0; } to { opacity: 1; } }
   .task:last-child { border-bottom: none; }
-  .task.dragging  { opacity: .2; }
-  .task.drag-over { border-top: 2px solid var(--text3); padding-top: 9px; }
+  .task.dragging  { opacity: .15; }
+  .task.drag-over { border-top: 1px solid var(--text3); }
+
+  /* drag handle — invisible until hover */
   .drag-handle {
     display: flex; align-items: center; flex-shrink: 0;
-    cursor: grab; color: var(--border2); padding-top: 3px;
-    transition: color .15s;
+    cursor: grab; padding-top: 2px; width: 14px;
+    color: transparent; transition: color .2s;
   }
-  .drag-handle:hover { color: var(--text3); }
+  .task:hover .drag-handle { color: var(--border2); }
   .drag-handle:active { cursor: grabbing; }
+
+  /* task actions — fade in on hover */
+  .task-actions {
+    display: flex; align-items: center; gap: 1px;
+    flex-shrink: 0; opacity: 0; transition: opacity .15s;
+  }
+  .task:hover .task-actions { opacity: 1; }
+
+  /* edit / delete */
+  .task-btn {
+    width: 24px; height: 24px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; border-radius: 4px;
+    transition: color .15s;
+    border: none; background: transparent; color: var(--text-muted);
+  }
+  .task-btn:hover        { color: var(--text2); }
+  .task-btn.del:hover    { color: #f55; }
+
+  /* inline edit */
+  .task-edit-input {
+    flex: 1; background: transparent; border: none;
+    border-bottom: 1px solid var(--border2);
+    color: var(--text); font-size: 14px;
+    font-family: 'Inter', sans-serif; outline: none;
+    padding: 1px 0; line-height: 1.4; width: 100%;
+  }
 
   /* Checkbox */
   .cb {
@@ -276,14 +306,7 @@
 
   .task-time { font-size: 11px; color: var(--text-muted); }
 
-  /* Delete */
-  .task-del {
-    width: 24px; height: 24px; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer; color: var(--border2); border-radius: 4px;
-    transition: color .15s; border: none; background: transparent;
-  }
-  .task-del:hover { color: #ff5555; }
+
 
   /* ── EMPTY ── */
   .empty { padding: 16px 0; color: var(--text-muted); font-size: 13px; }
@@ -557,12 +580,12 @@ function taskRow(t) {
   <div class="task ${t.done?'done':''}" data-id="${t.id}" draggable="true">
     <div class="drag-handle" title="Drag to reorder">
       <svg width="8" height="13" viewBox="0 0 8 13" fill="none">
-        <circle cx="2" cy="2"  r="1.2" fill="currentColor"/>
-        <circle cx="6" cy="2"  r="1.2" fill="currentColor"/>
-        <circle cx="2" cy="6.5" r="1.2" fill="currentColor"/>
-        <circle cx="6" cy="6.5" r="1.2" fill="currentColor"/>
-        <circle cx="2" cy="11" r="1.2" fill="currentColor"/>
-        <circle cx="6" cy="11" r="1.2" fill="currentColor"/>
+        <circle cx="2" cy="2"   r="1.1" fill="currentColor"/>
+        <circle cx="6" cy="2"   r="1.1" fill="currentColor"/>
+        <circle cx="2" cy="6.5" r="1.1" fill="currentColor"/>
+        <circle cx="6" cy="6.5" r="1.1" fill="currentColor"/>
+        <circle cx="2" cy="11"  r="1.1" fill="currentColor"/>
+        <circle cx="6" cy="11"  r="1.1" fill="currentColor"/>
       </svg>
     </div>
     <div class="cb" onclick="toggleDone('${t.id}',${t.done})">
@@ -571,19 +594,62 @@ function taskRow(t) {
       </svg>
     </div>
     <div class="task-body">
-      <div class="task-text">${esc(t.text)}</div>
+      <div class="task-text" id="txt-${t.id}">${esc(t.text)}</div>
       <div class="task-meta">
         <span class="tag-pill tag-${esc(tag)}">${esc(t.tag||'other')}</span>
         ${t.time?`<span class="task-time">${esc(t.time)}</span>`:''}
       </div>
     </div>
-    <button class="task-del" onclick="del('${t.id}')" title="Remove">
-      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-        <path d="M2 2L8 8M8 2L2 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-      </svg>
-    </button>
+    <div class="task-actions">
+      <button class="task-btn" data-edit-id="${t.id}" title="Edit">
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+          <path d="M8.5 1.5a1.5 1.5 0 012.121 2.121L4 10.243l-2.5.5.5-2.5L8.5 1.5z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button class="task-btn del" onclick="del('${t.id}')" title="Remove">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+          <path d="M2 2L8 8M8 2L2 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
   </div>`;
 }
+
+/* ── INLINE EDIT ── */
+function startEdit(id) {
+  const textEl = document.getElementById('txt-' + id);
+  if (!textEl || textEl.style.display === 'none') return;
+  const currentText = textEl.textContent;
+  const parent = textEl.parentElement;
+  textEl.style.display = 'none';
+
+  const inp = document.createElement('input');
+  inp.className = 'task-edit-input';
+  inp.value = currentText;
+  parent.insertBefore(inp, textEl);
+  inp.focus();
+  inp.select();
+
+  const save = () => {
+    const val = inp.value.trim();
+    if (val && val !== currentText) {
+      update(ref(db, `daily_tasks/${id}`), { text: val }).catch(e => toast(e.message));
+    }
+    inp.remove();
+    textEl.style.display = '';
+  };
+  inp.addEventListener('blur', save);
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter')  { e.preventDefault(); inp.blur(); }
+    if (e.key === 'Escape') { inp.value = currentText; inp.blur(); }
+  });
+}
+
+// Delegated click for edit buttons
+document.addEventListener('click', e => {
+  const btn = e.target.closest('[data-edit-id]');
+  if (btn) startEdit(btn.dataset.editId);
+});
 
 updateThemeIcon(document.documentElement.getAttribute('data-theme'));
 formatHeader();
